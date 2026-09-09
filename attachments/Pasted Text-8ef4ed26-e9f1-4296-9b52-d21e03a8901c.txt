@@ -1,0 +1,669 @@
+PACKING OPTIMIZER ENGINE — PRODUCTION IMPLEMENTATION PROMPT
+
+Act as a Senior Optimization Engineer specializing in 2D panel packing, bin packing, load balancing, and modular furniture packing systems.
+
+Build the Packing Optimizer as a global Unit-level optimization engine, NOT as a simple sequential box-filling algorithm.
+
+1. PRIMARY OBJECTIVE
+
+For each Unit:
+
+1. Determine the required number of boxes.
+2. Pack every panel exactly once.
+3. Ensure every panel physically fits inside its assigned box.
+4. Never exceed 40 kg per box.
+5. Prefer approximately 25 kg per box.
+6. Balance the total weight across all boxes as much as physically possible.
+7. Never sacrifice physical fit merely to achieve better weight balance.
+8. Keep different Units completely separated.
+9. Ensure that one complete Unit is packed entirely within the same box or set of boxes assigned to that Unit; no part of that Unit may be packed in any box belonging to another Unit.
+10. Continue optimization until no valid improvement is possible.
+
+Weight-Based Box Splitting Rule
+
+Use the following rule when determining the required number of boxes:
+
+- If one Unit or one packed group has a total weight of 40 kg or less, it may be packed in 1 box, provided all panels physically fit.
+- If the total weight is more than 40 kg, it must be split across 2 or more boxes.
+- Every resulting box must remain at or below the absolute 40 kg maximum.
+- Example: 50 kg total weight must be split into 2 boxes, even if the panels could otherwise fit into one box.
+- When splitting, distribute the weight as evenly as physically possible while respecting all panel-fit and box-count constraints.
+- This rule must be applied together with the required box-count rules defined below. Do not create unnecessary additional boxes when the configured box-count rules already determine the valid number of boxes.
+
+The optimizer must evaluate the entire Unit globally before finalizing its boxes.
+
+---
+
+2. HARD CONSTRAINTS
+
+These rules can NEVER be violated.
+
+Unit Isolation
+
+- Complete one Unit before starting the next Unit.
+- Never mix panels from different Units.
+- All panels belonging to one Unit must remain within that Unit's own box or boxes.
+- No box may contain panels from more than one Unit.
+- Unit processing order follows BOM Unit ID.
+
+Panel Assignment
+
+- Every valid panel must be assigned to exactly one box.
+- No duplicate panel.
+- No missing panel.
+
+Maximum Weight
+
+- Absolute maximum box weight = 40 kg.
+- A solution above 40 kg is INVALID.
+- Never create or retain a box above 40 kg.
+- If the total Unit weight exceeds 40 kg, the Unit must be split into at least 2 boxes, subject to physical and configured box-count rules.
+
+Physical Fit
+
+Before assigning or moving a panel, verify:
+
+- Panel Length
+- Panel Width
+- Box Length
+- Box Width
+- Panel orientation
+- Rotation availability
+- Remaining usable space
+- Existing panel placement
+- Any applicable stacking/thickness constraints
+
+Area alone is NOT sufficient to prove that a panel fits.
+
+A panel must physically fit in the remaining available space.
+
+---
+
+3. WEIGHT TARGET
+
+Use:
+
+Preferred Box Weight = 25 kg
+
+However:
+
+IMPORTANT
+
+25 kg is a preferred target, NOT a hard maximum.
+
+Examples:
+
+- 25 kg → Excellent
+- 26 kg → Excellent
+- 27 kg → Very Good
+- 28 kg → Good
+- 30 kg → Acceptable
+- 32 kg → Acceptable if required by physical packing
+- 39 kg → Valid but undesirable
+- 40 kg → Maximum valid
+- «40 kg → INVALID»
+
+Do NOT split or rearrange panels just to force every box to exactly 25 kg.
+
+---
+
+4. GLOBAL WEIGHT BALANCING
+
+First calculate:
+
+Total Unit Weight
+÷
+Required Box Count
+=
+Target Average Weight
+
+Example:
+
+Unit Total Weight = 106 kg
+Box Count = 4
+
+Target Average = 106 / 4
+               = 26.5 kg
+
+The optimizer should try to produce a distribution close to:
+
+26.5 / 26.5 / 26.5 / 26.5
+
+But this is an optimization target, not a hard requirement.
+
+---
+
+5. CRITICAL REBALANCING RULE
+
+The optimizer MUST NOT finalize boxes immediately after the first packing pass.
+
+After initial packing, run a Rebalancing Engine.
+
+The engine must detect weight imbalance and attempt valid:
+
+PASS 1 — SINGLE PANEL MOVE
+
+Try moving individual panels:
+
+Box A → Box B
+Box A → Box C
+Box A → Box D
+Box B → Box A
+...
+
+For every possible move:
+
+1. Check physical fit.
+2. Check new box weight.
+3. Ensure destination ≤ 40 kg.
+4. Ensure source remains valid.
+5. Ensure the moved panel remains within the same Unit's box group.
+6. Calculate whether overall solution improves.
+
+Only accept the move if it improves the global solution.
+
+---
+
+6. PASS 2 — PANEL SWAP
+
+If a single-panel move cannot improve the result, try swapping panels.
+
+Example:
+
+Box A:
+Panel X = 8 kg
+
+Box B:
+Panel Y = 5 kg
+
+Try:
+
+Box A gets Panel Y
+Box B gets Panel X
+
+Only accept if:
+
+- Both panels physically fit.
+- Both boxes remain ≤40 kg.
+- Both boxes belong to the same Unit.
+- Overall balance improves.
+- No other hard constraint is violated.
+
+---
+
+7. PASS 3 — MULTI-BOX REBALANCING
+
+For 3 or more boxes, attempt combinations across boxes.
+
+Example:
+
+A ↔ B
+A ↔ C
+A ↔ D
+B ↔ C
+B ↔ D
+C ↔ D
+
+Also test valid multi-panel movements where computationally practical.
+
+Continue until no meaningful improvement is possible.
+
+All multi-box rebalancing must remain strictly within the same Unit. Panels must never be transferred to a box assigned to another Unit.
+
+---
+
+8. IMPORTANT EXAMPLE — 2 BOXES
+
+Suppose:
+
+Unit Total = 52 kg
+Required Boxes = 2
+
+Initial packing:
+
+BOX 1 = 34 kg
+BOX 2 = 18 kg
+
+This is technically under 40 kg, but it is a POOR distribution.
+
+The optimizer MUST NOT immediately finalize it.
+
+It must search for panels that can move from Box 1 to Box 2.
+
+Example:
+
+Move 7 kg panel:
+
+34 → 27 kg
+18 → 25 kg
+
+Result:
+
+27 / 25
+
+This is much better.
+
+If another valid combination produces:
+
+26 / 26
+
+then:
+
+26 / 26
+
+must be preferred over:
+
+27 / 25
+
+because it is more balanced.
+
+---
+
+9. PHYSICAL-FIT OVERRIDE
+
+Never move a panel just because its weight improves the distribution.
+
+Example:
+
+BOX 1 = 34 kg
+BOX 2 = 18 kg
+
+A 7 kg panel would theoretically produce:
+
+27 / 25
+
+BUT if that panel cannot physically fit inside Box 2's remaining space:
+
+34 / 18
+
+must remain.
+
+The optimizer must NEVER violate physical-fit constraints for weight balancing.
+
+---
+
+10. FOUR-BOX EXAMPLE
+
+Suppose:
+
+Unit Total = 106 kg
+Required Boxes = 4
+
+Initial solution:
+
+BOX 1 = 27 kg
+BOX 2 = 25 kg
+BOX 3 = 22 kg
+BOX 4 = 32 kg
+
+Do NOT automatically reject this.
+
+Run the Rebalancing Engine.
+
+If valid panel moves/swaps can produce:
+
+27 / 26 / 27 / 26
+
+choose the improved solution.
+
+If physical constraints prevent improvement, retain:
+
+27 / 25 / 22 / 32
+
+because it is still a valid physical solution.
+
+---
+
+11. INITIAL PACKING STRATEGY
+
+Before weight balancing, create a strong initial physical packing solution.
+
+Sort panels using a difficulty priority such as:
+
+1. Largest panel area
+2. Longest dimension
+3. Largest weight
+4. Panels with unusual dimensions
+5. Panels with fewer possible placement locations
+
+Place difficult panels first.
+
+For each panel, test:
+
+- Original orientation
+- Rotated orientation, if permitted
+- Available free spaces
+- Best physical placement
+
+Use a practical 2D packing strategy such as:
+
+- Best-Fit
+- Best-Area-Fit
+- MaxRects/free-rectangle logic
+- Guillotine-style splitting where appropriate
+
+The implementation must maintain actual remaining usable spaces rather than relying only on total remaining area.
+
+---
+
+12. OPTIMIZATION SCORE
+
+Every candidate solution must receive a score.
+
+Optimize in this priority order:
+
+Priority 1
+
+All hard constraints satisfied.
+
+Priority 2
+
+Required number of boxes maintained, while ensuring that any Unit above 40 kg is split into at least 2 boxes.
+
+Priority 3
+
+No box exceeds 40 kg.
+
+Priority 4
+
+Minimize weight imbalance.
+
+Use:
+
+Weight Imbalance =
+Maximum Box Weight - Minimum Box Weight
+
+Lower is better.
+
+Priority 5
+
+Minimize total deviation from the preferred 25 kg target.
+
+Example:
+
+Deviation =
+ABS(Box Weight - 25)
+
+Calculate this across all boxes.
+
+Priority 6
+
+Minimize wasted physical space.
+
+Priority 7
+
+Prefer fewer unnecessary panel movements/rearrangements.
+
+---
+
+13. IMPORTANT OPTIMIZATION PRINCIPLE
+
+Do NOT optimize every box independently.
+
+Wrong approach:
+
+Fill Box 1 near 25 kg
+Fill Box 2 near 25 kg
+Fill Box 3 near 25 kg
+Fill Box 4 with remaining panels
+
+Correct approach:
+
+Take ALL panels of the Unit
+        ↓
+Determine required box count
+        ↓
+Create physical packing
+        ↓
+Evaluate ALL boxes together
+        ↓
+Rebalance globally within the same Unit
+        ↓
+Select best complete solution
+
+The final decision must always be based on the whole Unit, not an individual box.
+
+---
+
+14. BOX COUNT
+
+If the system has already determined that a Unit requires:
+
+4 boxes
+
+the optimizer must optimize within those 4 boxes.
+
+Do not create an additional box simply because one box is difficult to balance, unless the configured box-count rules explicitly permit changing the box count.
+
+Similarly, do not reduce the required number of boxes if physical/weight constraints make the reduced solution invalid.
+
+Additionally:
+
+- If the total Unit weight is more than 40 kg, 1 box is invalid and the Unit must use at least 2 boxes.
+- Example: a Unit weighing 50 kg must be split into 2 boxes.
+- If the configured box count is higher than the minimum required by weight, use the configured count and optimize within it.
+- Never use fewer boxes than required by either the configured rules or the 40 kg maximum-weight rule.
+- A Unit's complete panel set must be distributed only among the boxes assigned to that same Unit.
+- Never use a box assigned to another Unit to accommodate leftover panels, excess weight, or physical-space limitations.
+
+---
+
+15. BOX NUMBERING
+
+After optimization, assign final IDs:
+
+For Unit A with 4 boxes:
+
+BOX A-1/4
+BOX A-2/4
+BOX A-3/4
+BOX A-4/4
+
+For Unit B with 2 boxes:
+
+BOX B-1/2
+BOX B-2/2
+
+Box numbering must be assigned only AFTER the final optimized solution is selected.
+
+Each box ID must clearly identify its Unit, and the final output must preserve strict Unit-to-box ownership.
+
+---
+
+16. FINAL VALIDATION
+
+Before returning the result, run a complete validation.
+
+Panel validation
+
+- Every BOM panel assigned exactly once.
+- No duplicate assignment.
+- No missing panel.
+
+Unit validation
+
+- No Unit mixing.
+- Correct Unit sequence.
+- Every panel of a Unit is assigned only to that Unit's own boxes.
+- No Unit panel is assigned to any other Unit's box.
+
+Physical validation
+
+- Every panel physically fits.
+- Orientation is valid.
+- Placement does not overlap.
+- Remaining space calculation is correct.
+
+Weight validation
+
+- Calculate every box weight again from the assigned panels.
+- Every box ≤40 kg.
+- Any Unit above 40 kg is split into at least 2 boxes.
+- Preferred target deviation calculated.
+- Weight balance calculated.
+
+Box validation
+
+- Correct box count.
+- Correct BOX ID.
+- Correct Unit ID.
+- Every box belongs to exactly one Unit.
+- No box contains panels from multiple Units.
+
+If any validation fails, the solution is NOT final.
+
+---
+
+17. OPTIMIZATION STOP CONDITION
+
+Continue optimization while an improvement is possible.
+
+Stop when:
+
+No valid panel move improves the score
+AND
+No valid panel swap improves the score
+AND
+No valid multi-box improvement improves the score
+
+Also implement a practical iteration/time limit to prevent infinite optimization loops.
+
+The optimizer must always return the best valid solution found so far if the search limit is reached.
+
+---
+
+18. RESULT FORMAT
+
+For every Unit, generate:
+
+UNIT A
+
+Total Weight: 106 kg
+Boxes: 4
+Target Average: 26.5 kg
+
+BOX A-1/4
+Weight: 27 kg
+Panels: ...
+
+BOX A-2/4
+Weight: 26 kg
+Panels: ...
+
+BOX A-3/4
+Weight: 27 kg
+Panels: ...
+
+BOX A-4/4
+Weight: 26 kg
+Panels: ...
+
+Weight Imbalance: 1 kg
+Optimization Status: OPTIMIZED
+
+Also store enough information for the Sticker Generator and Packing Box List.
+
+---
+
+19. DO NOT DO THESE THINGS
+
+NEVER:
+
+- Force every box to exactly 25 kg.
+- Put a panel into a box based only on area.
+- Ignore panel rotation/orientation rules.
+- Exceed 40 kg.
+- Pack a Unit weighing more than 40 kg into a single box.
+- Mix Units.
+- Put any part of one Unit into a box assigned to another Unit.
+- Leave panels unassigned.
+- Duplicate panels.
+- Finalize after the first packing pass.
+- Optimize boxes independently.
+- Move a panel only because its weight looks useful without checking physical fit.
+- Create arbitrary box numbers before final optimization.
+- Destroy a significantly better physical layout for a tiny weight improvement.
+- Use one box for a 50 kg Unit; it must be split into at least 2 boxes.
+- Use another Unit's box to solve weight, space, or packing problems.
+
+---
+
+20. CORE ALGORITHM
+
+Implement the following conceptual workflow:
+
+INPUT BOM
+↓
+Group panels by Unit
+↓
+Calculate panel weights
+↓
+Determine required box count for each Unit
+↓
+Create an exclusive box pool for each Unit
+↓
+If Unit total weight > 40 kg, enforce minimum 2 boxes
+↓
+Sort difficult panels first
+↓
+Generate initial 2D physical packing separately for each Unit
+↓
+Calculate box weights
+↓
+Evaluate global Unit score
+↓
+Single-panel move optimization within the same Unit
+↓
+Panel-swap optimization within the same Unit
+↓
+Multi-box rebalancing within the same Unit
+↓
+Physical-fit validation after EVERY candidate change
+↓
+Weight validation after EVERY candidate change
+↓
+Unit-isolation validation after EVERY candidate change
+↓
+Repeat until no improvement
+↓
+Select best valid global solution for each Unit
+↓
+Assign final Box IDs
+↓
+Run final validation
+↓
+Generate Packing Box List
+↓
+Send final box data to Sticker Generator
+
+---
+
+21. MOST IMPORTANT RULE
+
+PHYSICAL FIT + MAXIMUM 40 KG are HARD CONSTRAINTS.
+
+25 KG is a PREFERRED TARGET.
+
+WEIGHT BALANCING is a GLOBAL OPTIMIZATION OBJECTIVE.
+
+Each complete Unit must remain fully isolated within its own assigned box or boxes. No part of one Unit may be packed in any box belonging to another Unit.
+
+If the total weight of a Unit is more than 40 kg, it must be split into at least 2 boxes. For example, 50 kg must be split into 2 boxes.
+
+Therefore:
+
+26 / 26  >  27 / 25  >  28 / 24  >  30 / 22  >  34 / 18
+
+when all solutions are physically valid and use the same number of boxes.
+
+But:
+
+34 / 18
+
+is acceptable if no better physically valid redistribution exists.
+
+The optimizer's job is NOT to produce mathematically perfect weight distribution.
+
+Its job is to produce the best physically valid packing solution possible, while ensuring that every Unit remains completely separate and no Unit's panels are placed in another Unit's box.
+
+END OF PACKING OPTIMIZER SPECIFICATION

@@ -1,0 +1,5 @@
+Unit,Part Name,Length (mm),Width (mm),Thickness (mm),Material,Quantity,Priority,Notes
+BED-01,Side Rail,2000,150,18,HDHMR,2,High,Handle with care
+BED-01,Headboard,1600,900,25,HDHMR,1,Normal,
+CAB-A,Door Left,720,296,18,MDF-WHITE,1,Normal,High gloss
+CAB-A,Shelf,564,280,18,MDF-WHITE,3,Normal,
